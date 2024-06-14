@@ -44,7 +44,7 @@ Our codebase is based on [Ultralytics](https://github.com/ultralytics/ultralytic
 
 Follow this [link](https://pytorch.org/get-started/locally/) and configure the download according to your specs. Example:
 
-![Example image for downloading pytorch+cuda](/images/cuda.png)
+![Example image for downloading pytorch+cuda](images/cuda.PNG)
 
 
 
