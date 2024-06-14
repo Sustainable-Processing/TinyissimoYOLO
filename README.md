@@ -52,6 +52,12 @@ Follow this [link](https://pytorch.org/get-started/locally/) and configure the d
 
 
 ```
-python b_train_export.py
+python a_train_export.py
 ```
 
+
+## Developer Notes:
+
+- We changed the training dataset to 'VOC.yaml" from the default "RATS.yaml" in `a_train_export.py`.
+- We found that dataset is configured to be exported to `G:\datasets\mojulian\` . This is probably done as it is a project still under deverlopment and the researchers don't want to waste time configuring downloads.
+- Model auto reloads for some reason. If you get training/testing error, just detle the data directory (it will change upon which dive you use). I am using `G:` dirve, so for me it is: `y G:\datasets\mojulian\`.
