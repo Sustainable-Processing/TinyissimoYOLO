@@ -31,14 +31,20 @@ Our codebase is based on [Ultralytics](https://github.com/ultralytics/ultralytic
 
 ### Create the environment
 
-Create the environment:
+1. Create the environment:
+   
+  ```
+  python3.10 -m venv venv
+  source venv/bin/activate
+  pip install -r requirements.txt 
+  ```
 
-```
-python3.10 -m venv venv
-source venv/bin/activate
-pip install torch==2.0.0+cu117 torchvision==0.15.1+cu117 torchaudio==2.0.1 --index-url https://download.pytorch.org/whl/cu117 
-pip install -r requirements.txt 
-```
+
+2. Install pytorch with cuda for GPU-accelerated computing
+
+Follow this [link](https://pytorch.org/get-started/locally/) and configure the download according to your specs. Example:
+
+![Example image for downloading pytorch+cuda](/images/cuda.png)
 
 
 
