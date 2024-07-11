@@ -223,6 +223,12 @@ for i in range(rows):
         width = int(w * x_factor)
         height = int(h * y_factor)
 
+        # Ensure the bounding box coordinates are within the image dimensions
+        left = max(0, min(left, 160))
+        top = max(0, min(top, 192))
+        width = max(0, min(width, 160))
+        height = max(0, min(height, 192))
+
         class_ids.append(class_id)
         scores.append(max_score)
         boxes.append([left, top, width, height])
