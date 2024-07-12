@@ -6,6 +6,19 @@ Model tested: v1_small.onnx
 Image tested: 2008_000021.jpg
 Dataset: VOC2007
 
+
+Findings: 24 x 30 output from the model.
+
+24 rows:
+- 4 bounding box coordinates
+- 20 class scores
+
+30 columns:
+- Each column represents a bounding box
+
+Algorithm to convert the output to bounding boxes and mask it to the filter.
+
+
 @Author: Tahsin Hasem
 @Date: 10th July 2023
 """
@@ -48,17 +61,19 @@ CLASS_NAMES = {
 }
 
 
-def save_output_data(outputs):
+THRESHOLD = 0.2  # Threshold for the confidence score
+IOU_THRESHOLD = 0.25
+
+
+def save_output_data(outputs, name=""):
     outputs_tensor = torch.from_numpy(outputs[0])
-    torch.save(outputs_tensor, "outputs_tensor.pt")
 
     output_numpy = outputs_tensor.numpy().reshape(-1, outputs[0].shape[-1])
     print("output_numpy shape:", output_numpy.shape)
 
     output_list = output_numpy.tolist()
-
     # Save the list as JSON
-    with open("output_numpy_array.json", "w") as json_file:
+    with open(f"output_numpy_array_{name}.json", "w") as json_file:
         json.dump(output_list, json_file)
 
 
@@ -79,21 +94,6 @@ def verify_and_load_onnx_runtime_session(onnx_model_path):
     onnx.checker.check_model(onnx_model)
 
     return onnxruntime.InferenceSession(onnx_model_path)
-
-
-model_runtime = verify_and_load_onnx_runtime_session("v1_small.onnx")
-image_1 = get_image_tensor("images/2008_000021.jpg", 160, 192)
-
-
-print("image_1 shape:", image_1.shape)
-
-# Get the name of the model's input layer
-input_name = model_runtime.get_inputs()[0].name
-
-
-# Run the model
-outputs = model_runtime.run(None, {input_name: image_1.numpy()})
-print("outputs shape:", outputs[0].shape)
 
 
 def get_input_image(image_path, width, height):
@@ -188,66 +188,103 @@ def draw_detections(img, box, score, class_id):
     )
 
 
-output = outputs[0]
+model_runtime = verify_and_load_onnx_runtime_session("v1_small.onnx")
 
-# Transpose the output to the correct shape for processing. Expected shape (30, 24)
-outputs_2 = np.transpose(np.squeeze(output[0]))
-print("outputs_2 shape:", outputs_2.shape)
-assert outputs_2.shape == (30, 24)
 
-rows = outputs_2.shape[0]
-boxes = []
-scores = []
-class_ids = []
+def run(image_path):
 
-# Calculate the scaling factors for the bounding box coordinates. The model was trained on 160x192 images. Image being used is 160x192, so the scaling factors are 1.
-x_factor = 1  # <- TODO: Change to adjust to camera resolution
-y_factor = 1  # <- TODO: Change to adjust to camera resolution
+    img_name = os.path.basename(image_path).split(".")[0]
+    image = get_image_tensor(image_path, 160, 192)
 
-THRESHOLD = 0.3  # Threshold for the confidence score
-IOU_THRESHOLD = 0.5
+    input_name = model_runtime.get_inputs()[0].name
+    outputs = model_runtime.run(None, {input_name: image.numpy()})
 
-for i in range(rows):
+    save_output_data(outputs, img_name)
 
-    classes_scores = outputs_2[i][4:]
-    max_score = np.amax(classes_scores)
+    output = outputs[0]
 
-    if max_score > THRESHOLD:
-        class_id = np.argmax(classes_scores)
-        print("max_score:", max_score, "class_id:", class_id, "i:", i)
+    # Transpose the output to the correct shape for processing. Expected shape (30, 24)
+    outputs_2 = np.transpose(np.squeeze(output[0]))
+    print("outputs_2 shape:", outputs_2.shape)
+    assert outputs_2.shape == (30, 24)
 
-        x, y, w, h = outputs_2[i][0], outputs_2[i][1], outputs_2[i][2], outputs_2[i][3]
+    rows = outputs_2.shape[0]
+    boxes = []
+    scores = []
+    class_ids = []
 
-        left = int((x - w / 2) * x_factor)
-        top = int((y - h / 2) * y_factor)
-        width = int(w * x_factor)
-        height = int(h * y_factor)
+    # Calculate the scaling factors for the bounding box coordinates. The model was trained on 160x192 images. Image being used is 160x192, so the scaling factors are 1.
+    x_factor = 1  # <- TODO: Change to adjust to camera resolution
+    y_factor = 1  # <- TODO: Change to adjust to camera resolution
 
-        # Ensure the bounding box coordinates are within the image dimensions
-        left = max(0, min(left, 160))
-        top = max(0, min(top, 192))
-        width = max(0, min(width, 160))
-        height = max(0, min(height, 192))
+    for i in range(rows):
 
-        class_ids.append(class_id)
-        scores.append(max_score)
-        boxes.append([left, top, width, height])
+        classes_scores = outputs_2[i][4:]
+        max_score = np.amax(classes_scores)
 
-# Perform non-maximum suppression to remove overlapping bounding boxes
-indices = cv2.dnn.NMSBoxes(boxes, scores, THRESHOLD, IOU_THRESHOLD)
+        if max_score > THRESHOLD:
+            class_id = np.argmax(classes_scores)
+            print("max_score:", max_score, "class_id:", class_id, "i:", i)
 
-# get np array of the image again.
-img = get_input_image("images/2008_000021.jpg", 160, 192)
+            x, y, w, h = (
+                outputs_2[i][0],
+                outputs_2[i][1],
+                outputs_2[i][2],
+                outputs_2[i][3],
+            )
 
-# Iterate over the selected indices after non-maximum suppression
-for i in indices:
-    # Get the box, score, and class ID corresponding to the index
-    box = boxes[i]
-    score = scores[i]
-    class_id = class_ids[i]
+            left = int((x - w / 2) * x_factor)
+            top = int((y - h / 2) * y_factor)
+            width = int(w * x_factor)
+            height = int(h * y_factor)
 
-    # Draw the detection on the input image
-    draw_detections(img, box, score, class_id)
+            # Ensure the bounding box coordinates are within the image dimensions
+            left = max(0, min(left, 160))
+            top = max(0, min(top, 192))
+            width = max(0, min(width, 160))
+            height = max(0, min(height, 192))
 
-cv2.imshow("image", img)
-cv2.waitKey(0)
+            class_ids.append(class_id)
+            scores.append(max_score)
+            boxes.append([left, top, width, height])
+
+    # Perform non-maximum suppression to remove overlapping bounding boxes
+    indices = cv2.dnn.NMSBoxes(boxes, scores, THRESHOLD, IOU_THRESHOLD)
+
+    # get np array of the image again.
+    img = get_input_image(image_path, 160, 192)
+
+    # Iterate over the selected indices after non-maximum suppression
+    for i in indices:
+        # Get the box, score, and class ID corresponding to the index
+        box = boxes[i]
+        score = scores[i]
+        class_id = class_ids[i]
+
+        # Draw the detection on the input image
+        draw_detections(img, box, score, class_id)
+
+    save_output_image(img, image_path)
+
+    cv2.imshow("image", img)
+    cv2.waitKey(0)
+
+
+def save_output_image(image, image_path):
+    image_name = os.path.basename(image_path)
+
+    if os.path.exists("output_images") is False:
+        os.mkdir("output_images")
+
+    output_path = os.path.join("output_images", image_name)
+    print("output_path:", output_path)
+    cv2.imwrite(output_path, image)
+
+
+images_dir = "gap9_tests"
+
+for image_name in os.listdir(images_dir):
+    image_path = os.path.join(images_dir, image_name)
+    print("image_path:", image_path)
+    run(image_path=image_path)
+    break
