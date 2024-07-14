@@ -61,8 +61,8 @@ CLASS_NAMES = {
 }
 
 
-THRESHOLD = 0.2  # Threshold for the confidence score
-IOU_THRESHOLD = 0.25
+THRESHOLD = 0.18  # Threshold for the confidence score
+IOU_THRESHOLD = 0.5
 
 
 def save_output_data(outputs, name=""):
