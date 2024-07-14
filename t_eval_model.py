@@ -14,7 +14,7 @@ Findings: 24 x 30 output from the model.
 - 20 class scores
 
 30 columns:
-- Each column represents a bounding box
+- Each column represents a potential object detection.
 
 Algorithm to convert the output to bounding boxes and mask it to the filter.
 
@@ -73,7 +73,7 @@ def save_output_data(outputs, name=""):
 
     output_list = output_numpy.tolist()
     # Save the list as JSON
-    with open(f"output_numpy_array_{name}.json", "w") as json_file:
+    with open(f"model_raw_data/model_output_{name}.json", "w") as json_file:
         json.dump(output_list, json_file)
 
 
@@ -96,14 +96,13 @@ def verify_and_load_onnx_runtime_session(onnx_model_path):
     return onnxruntime.InferenceSession(onnx_model_path)
 
 
-def get_input_image(image_path, width, height):
+def get_original_image(image_path):
     """
     get numpy array of image from image path
     """
 
     img = cv2.imread(image_path)
     img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-    img = cv2.resize(img, (width, height))
 
     return img
 
@@ -193,11 +192,14 @@ model_runtime = verify_and_load_onnx_runtime_session("v1_small.onnx")
 
 def run(image_path):
 
+    MODEL_IMAGE_WIDTH = 160
+    MODEL_IMAGE_HEIGHT = 192
+
     img_name = os.path.basename(image_path).split(".")[0]
-    image = get_image_tensor(image_path, 160, 192)
+    input_image = get_image_tensor(image_path, MODEL_IMAGE_WIDTH, MODEL_IMAGE_HEIGHT)
 
     input_name = model_runtime.get_inputs()[0].name
-    outputs = model_runtime.run(None, {input_name: image.numpy()})
+    outputs = model_runtime.run(None, {input_name: input_image.numpy()})
 
     save_output_data(outputs, img_name)
 
@@ -213,9 +215,17 @@ def run(image_path):
     scores = []
     class_ids = []
 
+    original_image = get_original_image(image_path)
+
+    original_height, original_width, _ = original_image.shape
+
     # Calculate the scaling factors for the bounding box coordinates. The model was trained on 160x192 images. Image being used is 160x192, so the scaling factors are 1.
-    x_factor = 1  # <- TODO: Change to adjust to camera resolution
-    y_factor = 1  # <- TODO: Change to adjust to camera resolution
+    x_factor = (
+        original_width / MODEL_IMAGE_WIDTH
+    )  # <- TODO: Change to adjust to camera resolution
+    y_factor = (
+        original_height / MODEL_IMAGE_HEIGHT
+    )  # <- TODO: Change to adjust to camera resolution
 
     for i in range(rows):
 
@@ -251,9 +261,6 @@ def run(image_path):
     # Perform non-maximum suppression to remove overlapping bounding boxes
     indices = cv2.dnn.NMSBoxes(boxes, scores, THRESHOLD, IOU_THRESHOLD)
 
-    # get np array of the image again.
-    img = get_input_image(image_path, 160, 192)
-
     # Iterate over the selected indices after non-maximum suppression
     for i in indices:
         # Get the box, score, and class ID corresponding to the index
@@ -262,12 +269,9 @@ def run(image_path):
         class_id = class_ids[i]
 
         # Draw the detection on the input image
-        draw_detections(img, box, score, class_id)
+        draw_detections(original_image, box, score, class_id)
 
-    save_output_image(img, image_path)
-
-    cv2.imshow("image", img)
-    cv2.waitKey(0)
+    save_output_image(original_image, image_path)
 
 
 def save_output_image(image, image_path):
@@ -287,4 +291,3 @@ for image_name in os.listdir(images_dir):
     image_path = os.path.join(images_dir, image_name)
     print("image_path:", image_path)
     run(image_path=image_path)
-    break

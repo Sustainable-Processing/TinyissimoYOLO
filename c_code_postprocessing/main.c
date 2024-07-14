@@ -127,7 +127,7 @@ int main() {
 
 
 void drawBox(unsigned char* imageData, int imageWidth, int imageHeight, Box box, unsigned char color[3]){
-    int boxThickness = 1;
+    int boxThickness = 2;
 
     for (int y = box.y; y < box.y + box.h; y++) {
         for (int x = box.x; x < box.x + box.w; x++) {
