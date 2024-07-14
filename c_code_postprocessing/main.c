@@ -14,48 +14,79 @@
 
 char *voc_names[] = {"aeroplane", "bicycle", "bird", "boat", "bottle", "bus", "car", "cat", "chair", "cow", "diningtable", "dog", "horse", "motorbike", "person", "pottedplant", "sheep", "sofa", "train", "tvmonitor"};
 
+unsigned char voc_colors[][3] = {
+    {255, 0, 0},      // Red for "aeroplane"
+    {0, 255, 0},      // Green for "bicycle"
+    {0, 0, 255},      // Blue for "bird"
+    {255, 255, 0},    // Yellow for "boat"
+    {0, 255, 255},    // Cyan for "bottle"
+    {255, 0, 255},    // Magenta for "bus"
+    {192, 192, 192},  // Silver for "car"
+    {128, 0, 0},      // Maroon for "cat"
+    {128, 128, 0},    // Olive for "chair"
+    {0, 128, 0},      // Dark Green for "cow"
+    {128, 0, 128},    // Purple for "diningtable"
+    {0, 128, 128},    // Teal for "dog"
+    {0, 0, 128},      // Navy for "horse"
+    {255, 165, 0},    // Orange for "motorbike"
+    {255, 192, 203},  // Pink for "person"
+    {128, 128, 128},  // Gray for "pottedplant"
+    {210, 105, 30},   // Chocolate for "sheep"
+    {255, 20, 147},   // Deep Pink for "sofa"
+    {32, 178, 170},   // Light Sea Green for "train"
+    {173, 216, 230}   // Light Blue for "tvmonitor"
+};
+
+
+// Define struct which represents a bounding box
+typedef struct {
+    float x, y, w, h; // Top-left coordinates, width and height of the bounding box
+    float score; // Confidence score of the bounding box
+    int class_id; // Class ID of the bounding box
+} Box;
 
 // Function prototype declaration
-void drawBox(unsigned char* imageData, int imageWidth, int imageHeight, int boxX, int boxY, int boxWidth, int boxHeight, unsigned char color[3]);
+void drawBox(unsigned char* imageData, int imageWidth, int imageHeight, Box box, unsigned char color[3]);
+void draw_bounding_boxes_for_indices(Box *boxes, int *indices, int num_boxes, unsigned char *imageData, int imageWidth, int imageHeight);
 void saveImageAsPNG(unsigned char* imageData, int width, int height, const char* filename);
 void transpose(float original[24][30], float transposed[30][24]);
 void getAMax(float *array, int size, float *maxValue, int *maxIndex);
-void helperFunction(float transposed[30][24], unsigned char* imageData, int width, int height);
+void get_boxes_passing_threshold(float transposed[30][24], unsigned char* imageData, int width, int height, Box boxes[30], int *boxesCount, float confidence_threshold);
 void putTextOnImage(unsigned char *imageData, int width, int height, int channels, const char *text, int x, int y);
+
+
+// Declaring functiion prototypes for the functions in nms.c
+void non_maximum_suppression(Box *boxes, int *indices, int num_boxes, float iou_threshold);
+
 
 int model_image_width = 160;
 int model_image_height = 192;
 
+int MODEL_OUTPUT_ARRAY_SIZE =24;
+int MODEL_OUTPUT_SUBARRAY_SIZE = 30;
+
 int main() {
-    // Your code here
+
+    // Setp 1: Load the image data from the PNG file.
 
     // Replace the manual reading and filling with red color with:
     int width, height, channels;
-    // Use stbi_load to read the image data
-    unsigned char *image_data = stbi_load("gap9_tests/1.png", &width, &height, &channels, 0);
+
+    // Use stbi_load to read the image data from the png file
+    unsigned char *image_data = stbi_load("../gap9_tests/1.png", &width, &height, &channels, 0);
     if (image_data == NULL) {
         printf("Failed to load image.\n");
         return 1;
     }
 
-    printf("Image width: %d, height: %d, channels: %d\n", width, height, channels);
 
+    //Step 2: Transpose the output array of the model.
 
-    int MODEL_OUTPUT_ARRAY_SIZE =24;
-    int MODEL_OUTPUT_SUBARRAY_SIZE = 30;
-
-    //loop through the MODEL_OUTPUT_ARRAY and print
-    for (int i = 0; i < MODEL_OUTPUT_ARRAY_SIZE; i++) {
-        for (int j = 0; j < MODEL_OUTPUT_SUBARRAY_SIZE; j++) {
-            printf("%f ", MODEL_OUTPUT_ARRAY[i][j]);
-        }
-        printf("\n"); // New line after printing each sub-array for better readability
-    }
-
+    // Declare the 2D arrays we shall use for the transpose operation.
     float original[MODEL_OUTPUT_ARRAY_SIZE][MODEL_OUTPUT_SUBARRAY_SIZE];
     float transposed[MODEL_OUTPUT_SUBARRAY_SIZE][MODEL_OUTPUT_ARRAY_SIZE];
 
-    // Copy the values from the MODEL_OUTPUT_ARRAY to the original array
+    // Copy the values from the MODEL_OUTPUT_ARRAY to the 'original' array
     for (int i = 0; i < MODEL_OUTPUT_ARRAY_SIZE; i++) {
         for (int j = 0; j < MODEL_OUTPUT_SUBARRAY_SIZE; j++) {
             original[i][j] = MODEL_OUTPUT_ARRAY[i][j];
@@ -65,43 +96,48 @@ int main() {
     // Call the transpose function
     transpose(original, transposed);
 
-    printf("\nTransposed array:\n");
-    // Print the transposed array
-    for (int i = 0; i < MODEL_OUTPUT_SUBARRAY_SIZE; i++) {
-        for (int j = 0; j < MODEL_OUTPUT_ARRAY_SIZE; j++) {
-            printf("%f ", transposed[i][j]);
-        }
-        printf("\n"); // New line after printing each sub-array for better readability
-    }
 
-    // Call the helper function
-    helperFunction(transposed, image_data, width, height);
+    // Step 3: Process the transposed array to get potential bounding boxes and draw them on the image.
+    
+    // Define an array of Box structs to store the bounding boxes
+    Box boxes[30];
+    int boxesCount = 0;
+    float confidence_threshold = 0.18;
+    get_boxes_passing_threshold(transposed, image_data, width, height, boxes, &boxesCount, confidence_threshold);
 
-    // unsigned char color[3] = {255, 255, 0};
+    // for (int i = 0; i < boxesCount; i++) {
+    //     printf("Box %d: [x: %.2f, y: %.2f, w: %.2f, h: %.2f], score: %.2f, class_id: %d\n", i, boxes[i].x, boxes[i].y, boxes[i].w, boxes[i].h, boxes[i].score, boxes[i].class_id);
+    // }
 
-    // int boxX = 50;
-    // int boxY = 50;
-    // int boxWidth = 100;
-    // int boxHeight = 100;
 
-    // drawBox(image_data, width, height, boxX, boxY, boxWidth, boxHeight, color);
+    // Step 4: Perform non-maximum suppression to remove overlapping boxes
+
+    // Define an array of integers to store the indices of the boxes to keep after non-maximum suppression
+    int *indices = (int *)calloc(30, sizeof(int));
+    float iou_threshold = 0.5;
+    non_maximum_suppression(boxes, indices, 30, iou_threshold);
+
+    draw_bounding_boxes_for_indices(boxes, indices, boxesCount, image_data, width, height);
+    free(indices);
+
+    //Step 4: Save the image with the bounding boxes drawn on it.
     saveImageAsPNG(image_data, width, height, "test_output.png");
     return 0;
 }
 
 
-void drawBox(unsigned char* imageData, int imageWidth, int imageHeight, int boxX, int boxY, int boxWidth, int boxHeight, unsigned char color[3]) {
+void drawBox(unsigned char* imageData, int imageWidth, int imageHeight, Box box, unsigned char color[3]){
     int boxThickness = 1;
 
-    for (int y = boxY; y < boxY + boxHeight; y++) {
-        for (int x = boxX; x < boxX + boxWidth; x++) {
+    for (int y = box.y; y < box.y + box.h; y++) {
+        for (int x = box.x; x < box.x + box.w; x++) {
             // Check if the current coordinates are within the image boundaries
             if (x >= 0 && x < imageWidth && y >= 0 && y < imageHeight) {
                 // Check if the current pixel is within the thickness range of the border
-                if ((x >= boxX && x < boxX + boxThickness) || // Left border
-                    (x < boxX + boxWidth && x >= boxX + boxWidth - boxThickness) || // Right border
-                    (y >= boxY && y < boxY + boxThickness) || // Top border
-                    (y < boxY + boxHeight && y >= boxY + boxHeight - boxThickness)) { // Bottom border
+                if ((x >= box.x && x < box.x + boxThickness) || // Left border
+                    (x < box.x + box.w && x >=  box.x + box.w - boxThickness) || // Right border
+                    (y >= box.y && y < box.y + boxThickness) || // Top border
+                    (y < box.y + box.h && y >= box.y + box.h - boxThickness)) { // Bottom border
                     // Calculate the position in the imageData array
                     int pos = (y * imageWidth + x) * 3; // Multiply by 3 for RGB
                     // Set the pixel color for the border
@@ -113,9 +149,19 @@ void drawBox(unsigned char* imageData, int imageWidth, int imageHeight, int boxX
         }
     }
 
-    putTextOnImage(imageData, imageWidth, imageHeight, 3, "class", 0, 0);
+    putTextOnImage(imageData, imageWidth, imageHeight, 3, voc_names[box.class_id], box.x, box.y);
 
     }
+
+
+void draw_bounding_boxes_for_indices(Box *boxes, int *indices, int num_boxes, unsigned char *imageData, int imageWidth, int imageHeight) {
+    for (int i = 0; i < num_boxes; ++i) {
+        if (indices[i]) {
+            // Draw the bounding box if index is marked as kept
+            drawBox(imageData, imageWidth, imageHeight, boxes[i], voc_colors[boxes[i].class_id]);
+        }
+    }
+}
 
 
 void saveImageAsPNG(unsigned char* imageData, int width, int height, const char* filename) {
@@ -130,7 +176,7 @@ void saveImageAsPNG(unsigned char* imageData, int width, int height, const char*
     }
 }
 
-
+// Function to transpose a 2D array of floats 24x30 to 30x24. Used to transpose output of the model.
 void transpose(float original[24][30], float transposed[30][24]) {
     for (int i = 0; i < 24; i++) {
         for (int j = 0; j < 30; j++) {
@@ -139,7 +185,7 @@ void transpose(float original[24][30], float transposed[30][24]) {
     }
 }
 
-
+// Function to find the maximum value and its index in an array
 void getAMax(float *array, int size, float *maxValue, int *maxIndex) {
     *maxValue = array[0];
     *maxIndex = 0;
@@ -152,8 +198,8 @@ void getAMax(float *array, int size, float *maxValue, int *maxIndex) {
     }
 }
 
-void helperFunction(float transposed[30][24], unsigned char* imageData, int width, int height) {
-    float threshold = 0.18;
+void get_boxes_passing_threshold(float transposed[30][24], unsigned char* imageData, int width, int height, Box boxes[30], int *boxesCount, float confidence_threshold) {
+    float threshold = confidence_threshold;
 
     for(int rowNumb = 0; rowNumb < 30; rowNumb++) {
         float row[20];
@@ -166,17 +212,9 @@ void helperFunction(float transposed[30][24], unsigned char* imageData, int widt
         int max_index;
         getAMax(row, 20, &max_value, &max_index);
 
+    
         if (max_value > threshold) {
-            printf("\nRow number: %i\n", rowNumb);
-            printf("Max value: %f\n", max_value);
-            printf("Max index: %i\n", max_index);
-            printf("Class: %s\n", voc_names[max_index]);
-            printf("X coordinate: %f\n", transposed[rowNumb][0]);
-            printf("Y coordinate: %f\n", transposed[rowNumb][1]);
-            printf("Width: %f\n", transposed[rowNumb][2]);
-            printf("Height: %f\n", transposed[rowNumb][3]);
-
-
+    
             float scale_x = width / model_image_width;
             float scale_y = height / model_image_height;
 
@@ -201,8 +239,21 @@ void helperFunction(float transposed[30][24], unsigned char* imageData, int widt
             float boxHeight = h;
 
             unsigned char color[3] = {255, 0, 0};
-            drawBox(imageData, width, height, boxX, boxY, boxWidth, boxHeight, color);
-            break;
+            
+            
+            Box box;
+            box.x = boxX;
+            box.y = boxY;
+            box.w = boxWidth;
+            box.h = boxHeight;
+            box.score = max_value;
+            box.class_id = max_index;
+
+            boxes[*boxesCount] = box;
+
+            (*boxesCount)++;
+
+            // drawBox(imageData, width, height, box, color); // Draw the bounding box on the image, use for debugging.
         }
     }
 
@@ -239,6 +290,4 @@ void putTextOnImage(unsigned char *imageData, int width, int height, int channel
         }
     }
 }
-
-
 
