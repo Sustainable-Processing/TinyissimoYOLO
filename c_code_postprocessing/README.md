@@ -54,6 +54,8 @@ Read the `main` method in `main.c` to understand the process, comments are detai
 ## Notes:
 
 -  Model Output is assumed to be `24x30` but in reality is `1x24x30`, so flattening must be performed.
+- `confidence_threshold` of 0.18 is being used
+- `iou_threshold` of 0.5 is being used.
 - Facing issues drawing detection class over image.
 - `Color Palette` in use is:
     ```c
