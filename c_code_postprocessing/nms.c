@@ -26,8 +26,21 @@ float iou(Box a, Box b) {
     return inter_area / union_area;
 }
 
+// Comparison function for sorting boxes by score in descending order
+int compare_boxes(const void *a, const void *b) {
+    Box *boxA = (Box *)a;
+    Box *boxB = (Box *)b;
+    float diff = boxB->score - boxA->score;
+    if (diff > 0) return 1;
+    else if (diff < 0) return -1;
+    else return 0;
+}
+
 // Function to perform non-maximum suppression
 void non_maximum_suppression(Box *boxes, int *indices, int num_boxes, float iou_threshold) {
+    // Sort the boxes by their scores in descending order
+    qsort(boxes, num_boxes, sizeof(Box), compare_boxes);
+    
     int *suppressed = (int *)calloc(num_boxes, sizeof(int));
 
     for (int i = 0; i < num_boxes; ++i) {

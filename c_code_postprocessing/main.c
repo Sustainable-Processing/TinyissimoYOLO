@@ -115,7 +115,7 @@ int main() {
     // Define an array of integers to store the indices of the boxes to keep after non-maximum suppression
     int *indices = (int *)calloc(30, sizeof(int));
     float iou_threshold = 0.5;
-    non_maximum_suppression(boxes, indices, 30, iou_threshold);
+    non_maximum_suppression(boxes, indices, boxesCount, iou_threshold);
 
     draw_bounding_boxes_for_indices(boxes, indices, boxesCount, image_data, width, height);
     free(indices);
