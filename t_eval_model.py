@@ -83,9 +83,10 @@ def get_image_tensor(path, width, height):
 
     transform = transforms.Compose([transforms.ToTensor()])
     img_t = transform(converted_img)
-    print("img_t shape:", img_t.shape)
-    img_t = img_t.unsqueeze(0)
+    print("Image Tesnro Shape:", img_t.shape)
+    img_t = img_t.unsqueeze(0)  # Add batch dimension
 
+    # Expected shape: (1, 3, 160, 192)
     return img_t
 
 
@@ -102,7 +103,6 @@ def get_original_image(image_path):
     """
 
     img = cv2.imread(image_path)
-    img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
 
     return img
 
